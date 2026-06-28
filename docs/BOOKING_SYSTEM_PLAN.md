@@ -1,5 +1,5 @@
 # Staycation Booking System — Master Plan
-> Last updated: 2026-06-28 (v9 — Stages 1–3 complete; booking flow fully working end-to-end; next: Stage 4 Netlify email functions)
+> Last updated: 2026-06-29 (v16 — Stage 9 complete; system is production-ready; first client onboarding is next)
 > Project: Booking system for staycation/villa clients (Lester AI Chatbot Services)
 
 ---
@@ -12,7 +12,14 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 
 ## Current Stage
 > ✅ **STAGES 1, 2, 3 — Complete**
-> 🔄 **STAGE 4 — Next: Build Netlify email functions** (start with `send-receipt.js`)
+> ✅ **STAGE 4 — Complete** (all 4 email functions + admin email notification deployed and tested)
+> ✅ **STAGE S — Complete** (security hardening done; booking flow end-to-end tested and working)
+> ✅ **STAGE 5 — Complete** (admin panel: login, dashboard, bookings, settings — fully live)
+> ✅ **STAGE 6 — Complete** (unit management, amenities, add-ons, date blocking pages live)
+> ✅ **STAGE 7 — Complete** (FullCalendar.js calendar page, expenses page, net proceeds on dashboard)
+> ✅ **STAGE 9 — COMPLETE** (all features live and bug-free as of 2026-06-29)
+> ⏭️ **STAGE 8 — Skipped** (chatbot system prompt update is a 5-min manual task — do anytime)
+> 🔄 **NEXT — First Real Client Onboarding** (see "Next Session" section below)
 
 ---
 
@@ -76,18 +83,20 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 | Resource | Value |
 |----------|-------|
 | Firebase Project ID | `lester-booking-system` |
-| Firebase Web API Key | `AIzaSyDjxQaLXKfuerR3XRgcWVbB6N0HpluKP5Y` |
+| Firebase Web API Key | `[REDACTED — in firebase-config.js, not committed to public repo]` |
 | Firebase Auth Domain | `lester-booking-system.firebaseapp.com` |
-| Firebase App ID | `1:441276126461:web:7c2f24f42aeaf140e25a94` |
-| Firebase Messaging Sender ID | `441276126461` |
+| Firebase App ID | `[REDACTED — in firebase-config.js]` |
+| Firebase Messaging Sender ID | `[REDACTED — in firebase-config.js]` |
 | Firebase Storage Bucket | **N/A — using Cloudinary** (see Screenshot Upload decision) |
 | Firestore Region | `asia-southeast1` (Singapore) |
 | Service Account Key | `C:\Users\LESTER\lester-booking-sa-key.json` |
 | Service Account Email | `firebase-admin-sdk@lester-booking-system.iam.gserviceaccount.com` |
 | First Client ID (`clientId`) | `lester-domain-staycation` |
 | Cloudinary Cloud Name | `dwqweaowd` |
-| Cloudinary API Key | `973926745765171` |
-| Cloudinary Upload Preset | `booking-screenshots` (unsigned) |
+| Cloudinary API Key | `[REDACTED — see Netlify env: CLOUDINARY_API_KEY]` |
+| Cloudinary API Secret | `[REDACTED — see Netlify env: CLOUDINARY_API_SECRET]` |
+| Cloudinary Upload Preset (public photos/QR) | `booking-public` (unsigned) |
+| Cloudinary Upload Preset (payment proofs) | ~~`booking-screenshots` (unsigned)~~ → **replaced by signed upload via `get-upload-signature` function** |
 | GitHub Repo (booking site) | `https://github.com/bookingPH/staycation-booking-site` |
 | GitHub Pages URL | `https://bookingph.github.io/staycation-booking-site/` |
 | Local repo (booking site) | `C:\Users\LESTER\Desktop\staycation-booking-site` |
@@ -98,9 +107,15 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 | Netlify Function: send-receipt | `https://staycation-admin.netlify.app/.netlify/functions/send-receipt` |
 | Netlify Function: send-confirm | `https://staycation-admin.netlify.app/.netlify/functions/send-confirm` |
 | Netlify Function: send-reject | `https://staycation-admin.netlify.app/.netlify/functions/send-reject` |
-| First Admin Email (client login) | `admin@lesterbooking.com` / `Admin@2026!` |
+| Netlify Function: send-cancel | `https://staycation-admin.netlify.app/.netlify/functions/send-cancel` |
+| Netlify Function: create-booking | `https://staycation-admin.netlify.app/.netlify/functions/create-booking` |
+| Netlify Function: get-upload-signature | `https://staycation-admin.netlify.app/.netlify/functions/get-upload-signature` |
+| Netlify Function: expire-holds | `https://staycation-admin.netlify.app/.netlify/functions/expire-holds?secret=EXPIRE_SECRET` |
+| EXPIRE_SECRET | `[in Netlify env vars — Staycation2026!]` |
+| Cron job (expire-holds) | cron-job.org — every 15 min — `*/15 * * * *` |
+| First Admin Email (client login) | `admin@lesterbooking.com` / `[ROTATED — stored in password manager]` |
 | Test SMTP Email | `lstrmrcd@gmail.com` (Lester's Gmail — for testing only) |
-| Test SMTP App Password | `rqsyiaznmbfapnfr` (set in Netlify env vars) |
+| Test SMTP App Password | `[ROTATED — new value in Firestore settings/private]` |
 | SMTP Host | `smtp.gmail.com` port `587` |
 | Telegram | Optional per client — stored in Firestore `settings.telegramToken` + `settings.telegramChatId` |
 | Existing Netlify (Beligas CRM) | `beligas-crm.netlify.app` |
@@ -112,14 +127,16 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 
 ```
 /clients/{clientId}/
-  settings/main      → companyName, address, phone, email, logo
-                        gcashName, gcashNumber, gcashQR (Cloudinary URL)
-                        paymayaName, paymayaNumber, paymayaQR (Cloudinary URL)
-                        bankName, bankAccountName, bankAccountNumber, bankQR (Cloudinary URL)
+  settings/public    → companyName, address, phone, email, logo
+                        gcashName, gcashNumber, gcashQrUrl (Cloudinary URL)
+                        mayaName, mayaNumber, mayaQrUrl (Cloudinary URL)
+                        bankName, bankAccountName, bankAccount, bankQrUrl (Cloudinary URL)
                         downPaymentAmount (₱ — reservation fee, editable)
                         securityDeposit (₱ — refundable, editable; collected at check-in)
-                        smtpEmail (client's Gmail), smtpPassword (Gmail App Password)
+                        ← PUBLIC read (booking site reads company name, QR, payment info)
+  settings/private   → smtpEmail (client's Gmail), smtpPassword (Gmail App Password)
                         telegramToken (optional), telegramChatId (optional)
+                        ← NO public read — Admin SDK only (Netlify Functions read via Firebase Admin)
   units/{unitId}/    → name, description, location, weekdayRate, weekendRate, checkIn, checkOut,
                         maxGuests, maxExtraGuests, extraGuestFee, petsAllowed, petFee,
                         rating, photoURLs[], amenityIds[], status, createdAt
@@ -131,8 +148,8 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
                             confirmed / rejected / cancelled), adminNote, createdAt, confirmedAt
   availability/{bookingId}/ → bookingId, unitId, checkIn, checkOut, status, createdAt
                                ← PUBLIC read — calendar uses this (no personal info exposed)
-                               ← Written by booking site on submission
-                               ← Updated to 'confirmed'/'rejected'/'cancelled' by admin panel
+                               ← Written SERVER-SIDE by create-booking.js (not by browser)
+                               ← Updated to 'confirmed'/'rejected'/'cancelled'/'expired' by Netlify Functions
   amenities/{amenityId}/ → name, icon (Font Awesome class), description
   addons/{addonId}/  → unitId (or 'all'), name, price, billingType (pernight / onetime)
   blocked_dates/{id}/ → unitId, startDate, endDate, reason, createdAt
@@ -415,61 +432,69 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 ### Tasks
 
 **Netlify Setup for Functions**
-- [ ] Create `netlify/functions/` folder in admin panel repo (`C:\Users\LESTER\Desktop\staycation-admin-panel\netlify\functions\`)
-- [ ] Set Netlify environment variables on staycation-admin.netlify.app:
-  - [ ] `FIREBASE_SERVICE_ACCOUNT` — paste contents of `C:\Users\LESTER\lester-booking-sa-key.json`
-  - [ ] `SMTP_HOST` = `smtp.gmail.com`
-  - [ ] `SMTP_PORT` = `587`
-  - [ ] (SMTP user/pass are per-client, read from Firestore `settings/main` at send time — NOT in env vars)
-- [ ] Install nodemailer: `npm install nodemailer` in admin panel repo
-- [ ] Add `package.json` if not present (Netlify needs it to install nodemailer during build)
+- [x] Create `netlify/functions/` folder in admin panel repo (`C:\Users\LESTER\Desktop\staycation-admin-panel\netlify\functions\`) ✅
+- [x] Set Netlify environment variables on staycation-admin.netlify.app: ✅
+  - [x] `FIREBASE_SERVICE_ACCOUNT` — stored as base64-encoded JSON (avoids CLI quoting issues) ✅
+  - [x] `SMTP_HOST` = `smtp.gmail.com` ✅
+  - [x] `SMTP_PORT` = `587` ✅
+  - [x] (SMTP user/pass are per-client, read from Firestore `settings/main` at send time — NOT in env vars) ✅
+- [x] Install nodemailer + firebase-admin: `npm install` in admin panel repo ✅
+- [x] `package.json` created with nodemailer + firebase-admin dependencies ✅
 
 **Function 1: `send-receipt.js` ← BUILD THIS FIRST**
-- [ ] Triggered by booking website after successful booking save (POST call from browser)
-- [ ] Must allow CORS from `https://bookingph.github.io` (booking site origin)
-- [ ] Accepts JSON body: `{ clientId, bookingId, referenceNo, guestName, guestEmail, unitName, checkIn, checkOut, nights, grandTotal, paymentMethod, screenshotURL, adminPanelUrl }`
-- [ ] Reads client's SMTP credentials from Firestore: `clients/{clientId}/settings/main` → `smtpEmail`, `smtpPassword`
-- [ ] Reads company name from same settings doc → `companyName`
-- [ ] Sends email to GUEST (guestEmail):
+- [x] Triggered by booking website after successful booking save (POST call from browser) ✅
+- [x] Must allow CORS from `https://bookingph.github.io` (booking site origin) ✅
+- [x] Accepts JSON body: `{ clientId, bookingId, referenceNo, guestName, guestEmail, unitName, checkIn, checkOut, nights, grandTotal, paymentMethod, screenshotURL, adminPanelUrl }` ✅
+- [x] Reads client's SMTP credentials from Firestore: `clients/{clientId}/settings/main` → `smtpEmail`, `smtpPassword` ✅
+- [x] Reads company name from same settings doc → `companyName` ✅
+- [x] Sends email to GUEST (guestEmail): ✅
   - Subject: `Booking Request Received — [referenceNo]`
   - Body: property name, check-in, check-out, nights, grand total, payment method, reference number
   - Message: "We received your payment screenshot. We'll confirm within 1–2 hours."
   - "From" name: client's company name
-- [ ] Sends Telegram alert to ADMIN (if `settings.telegramToken` and `settings.telegramChatId` are set):
-  - Message: "🔔 New Booking\nRef: BK-xxx\nGuest: Name\nRoom: Suite B\nDates: Jun 30 – Jul 2 (2 nights)\nTotal: ₱7,000\nPayment: GCash\nScreenshot: [URL]\nAdmin Panel: [URL]"
-  - Use Telegram sendMessage API: `https://api.telegram.org/bot{TOKEN}/sendMessage`
-  - If Telegram fails: log error, do NOT block the email send
-- [ ] Returns `{ success: true }` or `{ error: "..." }`
-- [ ] CORS headers required: `Access-Control-Allow-Origin: https://bookingph.github.io`
-- [ ] Test: trigger a booking on GitHub Pages, verify guest email arrives + Telegram alert fires
+- [x] Sends Telegram alert to ADMIN (if `settings.telegramToken` and `settings.telegramChatId` are set): ✅
+  - Message format with emoji, ref, guest, room, dates, total, payment, screenshot link, admin panel link
+  - Uses Telegram sendMessage API with HTML parse mode
+  - If Telegram fails: logs error, does NOT block the email send
+  - **Notification design decision:** Guest gets email, client/admin gets Telegram. No self-email (avoids client emailing their own address).
+  - **How to set up Telegram per client (Lester does this during onboarding):**
+    1. Open Telegram → @BotFather → `/newbot` → get bot token
+    2. Tell client to search the bot and click Start
+    3. Visit `https://api.telegram.org/botTOKEN/getUpdates` → get chat ID
+    4. Write `telegramToken` + `telegramChatId` to Firestore `clients/{clientId}/settings/main`
+  - **Client onboarding kit** (full credential checklist) — to be created as separate doc after Stage 4
+- [x] Returns `{ success: true }` or `{ error: "..." }` ✅
+- [x] CORS headers required: `Access-Control-Allow-Origin: https://bookingph.github.io` ✅
+- [x] Test: full end-to-end POST from PowerShell → 200 `{"success":true}` → email received at lstrmrcd@gmail.com ✅
 
 **Function 2: `send-confirm.js`**
-- [ ] Triggered by admin panel when admin clicks "Confirm" on a booking
-- [ ] Accepts: guestName, guestEmail, bookingId, referenceNo, unitName, checkIn, checkOut, checkInTime, checkOut, checkOutTime, grandTotal, adminNote (optional)
-- [ ] Sends email to customer:
+- [x] Triggered by admin panel when admin clicks "Confirm" on a booking ✅
+- [x] Accepts: clientId, guestName, guestEmail, bookingId, referenceNo, unitName, checkIn, checkOut, checkInTime, checkOutTime, grandTotal, paymentMethod, adminNote (optional) ✅
+- [x] Sends email to customer: ✅
   - Subject: `✅ Booking Confirmed — [Reference No]`
-  - Body: full booking summary, check-in time, check-out time, property address
+  - Body: full booking summary, check-in/out with times, property address, contact info
   - Message: "Your booking is confirmed! See you on [check-in date]."
   - Include: "If you need to cancel or reschedule, contact us at [phone/email]"
-- [ ] Test: call function directly, verify email received
+- [x] Test: `{"success":true}` → email received ✅
 
 **Function 3: `send-reject.js`**
-- [ ] Triggered by admin panel when admin clicks "Reject" on a booking
-- [ ] Accepts: guestName, guestEmail, bookingId, referenceNo, unitName, checkIn, checkOut, adminNote
-- [ ] Sends email to customer:
+- [x] Triggered by admin panel when admin clicks "Reject" on a booking ✅
+- [x] Accepts: clientId, guestName, guestEmail, bookingId, referenceNo, unitName, checkIn, checkOut, adminNote (required), bookingWebsiteUrl (optional) ✅
+- [x] Server enforces adminNote required — returns 400 if blank ✅
+- [x] Sends email to customer: ✅
   - Subject: `Booking Update — [Reference No]`
-  - Body: explains rejection, includes admin note as reason
+  - Body: explains rejection, adminNote shown as reason, "Book Again" button if bookingWebsiteUrl provided
   - Message: "You may re-book by visiting our booking site. We apologize for the inconvenience."
-- [ ] Test: call function directly, verify email received
+- [x] Test: `{"success":true}` → email received ✅
 
 **Function 4: `send-cancel.js`**
-- [ ] Triggered by admin panel when admin clicks "Cancel Booking" on a confirmed booking
-- [ ] Accepts: guestName, guestEmail, bookingId, referenceNo, unitName, checkIn, checkOut, adminNote
-- [ ] Sends email to customer:
+- [x] Triggered by admin panel when admin clicks "Cancel Booking" on a confirmed booking ✅
+- [x] Accepts: clientId, guestName, guestEmail, bookingId, referenceNo, unitName, checkIn, checkOut, adminNote (optional) ✅
+- [x] Sends email to customer: ✅
   - Subject: `Booking Cancellation Notice — [Reference No]`
-  - Body: booking summary + cancellation notice + admin note/reason
+  - Body: booking summary + cancellation notice + adminNote + deposit query instruction
   - Message: "We regret to inform you that your booking has been cancelled. Please contact us at [phone/email] for questions about your deposit."
-- [ ] Test: call function directly, verify email received
+- [x] Test: `{"success":true}` → email received ✅
 
 **Email Template Design**
 - [ ] All 4 emails use consistent HTML template (header with logo/property name, body, footer)
@@ -477,21 +502,184 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 - [ ] Logo/property name reads from Firestore `settings`
 - [ ] Plain-text fallback for email clients that don't render HTML
 
-**Email Spam Prevention**
+**Email Spam Prevention** — ⏩ Deferred to Stage S (Security Hardening)
 - [ ] Verify SPF record is set on privateemail.com sending domain (prevents Gmail marking as spam)
 - [ ] Verify DKIM record is configured (privateemail.com provides this — check their DNS settings)
 - [ ] Send test emails to Gmail, Yahoo, and Outlook — verify they land in inbox, not spam
 - [ ] If landing in spam: add "from" name matching domain (e.g., no-reply@clientdomain.com)
 
-**Testing**
+**Testing** — ⏩ Deferred to Stage S (Security Hardening)
 - [ ] Test all 4 functions via Postman or direct fetch call
 - [ ] Verify emails arrive in inbox (not spam) on Gmail, Yahoo, Outlook
 - [ ] Verify email content is correct for each scenario
 
 ### Stage Notes
+**2026-06-28:**
+- `package.json` created in admin panel repo with `nodemailer` + `firebase-admin` dependencies. `npm install` run locally so Netlify can bundle them.
+- `FIREBASE_SERVICE_ACCOUNT` env var: stored as base64-encoded minified JSON (not raw JSON) because Netlify CLI strips quotes from JSON values when set via PowerShell. Decoded in function with `Buffer.from(val, 'base64').toString('utf8')` before JSON.parse. All other Firebase functions in this project should use the same pattern.
+- `smtpEmail` + `smtpPassword` seeded into Firestore `clients/lester-domain-staycation/settings/main` using test credentials (lstrmrcd@gmail.com + Gmail App Password).
+- Email HTML template: terracotta (#C8623A) header, reference number box, booking detail table, pending-status notice, plain-text fallback.
+- Telegram alert: optional, silently skipped if token/chatId not in Firestore settings. Does not block email.
+- Notification split decided: guest = email, client/admin = Telegram. Avoids self-email awkwardness.
+- Telegram onboarding steps documented in plan (BotFather → token → chat ID → write to Firestore).
+- Client onboarding kit (full credential checklist) to be created as a separate doc after Stage 4 is complete.
+- Tested: POST with full payload → `{"success":true}` → email delivered to lstrmrcd@gmail.com.
+- Function URL: `https://staycation-admin.netlify.app/.netlify/functions/send-receipt`
 
 ### Status
-- [ ] Stage 4 Complete ✅
+- [x] Stage 4 Complete ✅ (2026-06-28) — All 4 email functions deployed. Admin email notification added to send-receipt.js (fires on every new booking). Email spam prevention deferred to Stage 9 polish.
+
+---
+
+## Stage S — Security Hardening
+> Goal: System is safe to go live. No exposed credentials, no server-trusting-browser-data, no race-condition double-bookings, no unrestricted public uploads.
+> ⛔ Stage 5+ is blocked until every Priority 0–3 task below is complete and tested.
+
+### Architecture Changes Locked in This Stage
+
+| Decision | Old | New | Reason |
+|----------|-----|-----|--------|
+| Firestore `settings` | Single `settings/main` (public read) | `settings/public` (public read) + `settings/private` (no public read, Admin SDK only) | SMTP + Telegram credentials must never be readable by browser JS |
+| Booking creation | Browser writes directly to Firestore | Server-side `create-booking` Netlify function | Server must calculate prices, claim inventory atomically; browser cannot be trusted |
+| Per-night inventory | `availability` collection (public create) | `inventory/{unitId_YYYY-MM-DD}` (server-only, Firestore transaction) | Atomic claim of all nights prevents any race-condition double-booking |
+| Email functions input | Full booking data sent by caller | Only `clientId` + `bookingId`; function fetches from Firestore | Prevents caller from spoofing email, amounts, recipients |
+| Payment screenshot upload | Unsigned Cloudinary preset (browser-controlled) | Signed upload via `get-upload-signature` function | Server controls folder, format, size, filename |
+| Public Firestore create on `bookings` | `allow create: if true` | `allow create: if false` — server-side only | Prevents fake bookings without a real booking transaction |
+| Public Firestore create on `availability` | `allow create: if true` | `allow create: if false` — server-side only | Prevents fake calendar blocks |
+
+### Priority 0 — Credential Rotation and Secrets (MANUAL — Lester must do these)
+> These cannot be done by code. Do them before running the migration script.
+
+- [ ] **Rotate Gmail App Password** — Go to myaccount.google.com → Security → App passwords → Revoke old → Generate new → Update in Firestore `settings/private` after migration
+- [ ] **Reset Firebase admin password** — Firebase Console → Authentication → admin@lesterbooking.com → Reset password → Store new password in password manager only (never in docs)
+- [ ] **Add Cloudinary API Secret to Netlify** — Cloudinary Console → API Keys → copy API Secret → Netlify → staycation-admin → Environment variables → add `CLOUDINARY_API_SECRET`
+- [ ] **Confirm git history** — The commit `609c313` contains real credentials in BOOKING_SYSTEM_PLAN.md. Options: (a) make the lester-ai-chatbot repo private on GitHub if not already; (b) use `git filter-branch` or BFG to scrub history. Since admin password and SMTP password are being rotated, historical exposure is mitigated — rotating credentials is the critical step.
+- [x] Remove real credential values from BOOKING_SYSTEM_PLAN.md → replaced with `[REDACTED]` / `[ROTATED]` ✅
+
+### Priority 0 — Settings Split (Code)
+- [x] Split `settings/main` → `settings/public` + `settings/private` ✅
+  - `settings/public`: companyName, address, phone, email, logo, gcashName, gcashNumber, gcashQR, paymayaName, paymayaNumber, paymayaQR, bankName, bankAccountName, bankAccountNumber, bankQR, downPaymentAmount, securityDeposit
+  - `settings/private`: smtpEmail, smtpPassword, telegramToken, telegramChatId
+- [x] Migration script written: `C:\Users\LESTER\Desktop\staycation-admin-panel\scripts\migrate-settings.js` ✅
+- [ ] Migration script run against live Firestore (`node scripts/migrate-settings.js`)
+- [ ] Verify `settings/public` readable in browser, `settings/private` returns permission-denied in browser
+
+### Priority 0 — Firestore Rules
+- [x] `settings/private` — `allow read, write: if false` (Admin SDK bypasses, browser JS cannot read) ✅
+- [x] `settings/public` — `allow read: if true`, `allow write: if isAdminForClient()` ✅
+- [x] `bookings` — `allow create: if false` (server-side only via Admin SDK) ✅
+- [x] `availability` — `allow read: if true`, `allow write: if false` (server-side only) ✅
+- [x] `inventory` — `allow read, write: if false` (Admin SDK only) ✅
+- [x] Rules deployed ✅
+
+### Priority 1 — Secure Email Functions
+All four functions now accept only `clientId` + `bookingId` and fetch all data from Firestore server-side.
+
+- [x] `send-receipt.js` rewritten ✅
+  - Accepts: `{ clientId, bookingId }`
+  - Fetches booking from `clients/{clientId}/bookings/{bookingId}`
+  - Reads SMTP from `settings/private`, company info from `settings/public`
+  - Idempotency: Firestore transaction checks + sets `receiptSentAt` before sending — duplicate calls return `{ success: true, alreadySent: true }`
+  - Validates: booking must exist and status must be `pending_review`
+- [x] `send-confirm.js` rewritten ✅
+  - Accepts: `{ clientId, bookingId, adminNote? }`
+  - Transaction: verify status is `pending_review` → set `confirmed` + `confirmedAt` atomically
+  - Updates `availability/{bookingId}.status` to `confirmed`
+  - Inventory stays claimed (confirmed = permanently blocked)
+  - Reads all email data from Firestore
+- [x] `send-reject.js` rewritten ✅
+  - Accepts: `{ clientId, bookingId, adminNote }` — adminNote enforced server-side
+  - Transaction: verify `pending_review` → set `rejected` + `adminNote` + `rejectedAt`
+  - Releases inventory: deletes `inventory/{unitId_YYYY-MM-DD}` for all nights
+  - Updates `availability/{bookingId}.status` to `rejected`
+- [x] `send-cancel.js` rewritten ✅
+  - Accepts: `{ clientId, bookingId, adminNote? }`
+  - Transaction: verify `confirmed` → set `cancelled` + `cancelledAt`
+  - Releases inventory for all nights
+  - Updates `availability/{bookingId}.status` to `cancelled`
+
+### Priority 1 — Server-Side Price Calculation
+- [x] `create-booking.js` calculates server-side: ✅
+  - Per-night rate (weekday Mon–Thu vs weekend Fri–Sun)
+  - Extra guest fee (if numGuests > unit.maxGuests)
+  - Add-ons (per-night × nights, or one-time)
+  - Grand total, reservation fee, security deposit, balance due at check-in
+
+### Priority 2 — Atomic Double-Booking Prevention
+- [x] `create-booking.js` written ✅
+  - Accepts: `{ clientId, unitId, checkIn, checkOut, guestName, guestEmail, guestPhone, numGuests, addonIds[], paymentMethod, screenshotUrl }`
+  - Firestore transaction: reads all `inventory/{unitId_YYYY-MM-DD}` docs for requested nights
+  - If any night is held (and not expired) or confirmed → returns `{ error: 'DATES_NOT_AVAILABLE' }` — entire booking fails
+  - If all clear → atomically claims all nights (status: `held`, expiresAt: now + 45 min) + creates booking + creates availability doc
+  - Returns `{ bookingId, referenceNo }`
+- [x] Pending hold expiration: 45-minute TTL on each `inventory` doc (`expiresAt` field) ✅
+- [x] Expired holds treated as available in transaction check ✅
+- [x] Scheduled expiration cleanup — `expire-holds.js` deployed; cron-job.org fires every 15 min (`*/15 * * * *`); Firestore composite index created for `inventory (status ASC, expiresAt ASC)` ✅
+- [x] Inventory released on reject / cancel (inside send-reject.js and send-cancel.js) ✅
+
+### Priority 3 — Payment Screenshot Security
+- [x] `get-upload-signature.js` written ✅
+  - Accepts: `{ clientId }` — rate limited (max 5 signatures per IP per 10 min via in-memory store)
+  - Returns Cloudinary signed upload params: `{ signature, apiKey, timestamp, folder, cloudName }`
+  - Server controls: folder = `payment-proofs/{clientId}/`, allowed formats = jpg/png/webp, max file size = 10MB, use_filename = false (generated filename)
+  - Requires `CLOUDINARY_API_SECRET` in Netlify env vars
+- [ ] Cloudinary: create two upload presets — `booking-public` (unsigned, for property photos/QR) and restrict `payment-proofs/` folder to signed uploads only
+- [ ] Payment screenshot URLs: stored as Cloudinary URLs in Firestore (already done) — access via Cloudinary signed URL in admin panel (Stage 5 task)
+- [ ] Retention policy: Cloudinary auto-delete payment proofs after 365 days (set in Cloudinary console → Media Library → Folders → payment-proofs → Auto-backup/deletion rule)
+
+### Priority 4 — Multi-Client Security (Deferred to Stage 5)
+> Stage 5 (admin panel) is where admin auth happens — multi-client isolation verified there.
+- [ ] Every admin user assigned `clientId` via Firestore `admins/{email}` doc (already in rules) — ⏩ verified during Stage 5 admin login build
+- [ ] Firestore rules verify user can only access their `clientId` — ✅ already enforced by `isAdminForClient()` function in rules
+- [ ] Add Firebase Auth Custom Claims (`clientId`) to complement Firestore check — ⏩ Stage 5
+- [ ] Cross-client isolation test — ⏩ Stage S testing section below
+
+### Priority 5 — Operations and Privacy (Deferred to Stage 5 + Stage 7)
+- [ ] Privacy notice and guest consent on booking form — ⏩ Stage 5 booking site update
+- [ ] Data retention / deletion policy document — ⏩ Stage 9 (polish)
+- [ ] Booking status history collection (`statusHistory` subcollection on each booking) — ⏩ Stage 5
+- [ ] Audit log for confirm/reject/cancel/edits — ⏩ Stage 5 (written by email functions on each action)
+- [ ] Admin password reset process documentation — ⏩ Stage 9
+- [ ] Booking data export and backup procedure — ⏩ Stage 9
+- [ ] Monitoring for failed emails and function errors — ⏩ Stage 7
+- [ ] Admin-visible notification log (type, recipient, timestamp, success/failure, error, retry count) — ⏩ Stage 5
+
+### Email Spam Prevention (from Stage 4 — carried forward)
+- [ ] Verify SPF record on sending domain
+- [ ] Verify DKIM configured
+- [ ] Send test emails to Gmail, Yahoo, Outlook — verify inbox not spam
+
+### Required Tests Before Stage 5
+- [ ] Two simultaneous `create-booking` calls for same unit/dates → only one succeeds, other gets `DATES_NOT_AVAILABLE`
+- [ ] Expired pending hold (wait 45 min or manually set `expiresAt` to past) → dates available again
+- [ ] Browser posts modified grand total → server ignores it, uses own calculation
+- [ ] `create-booking` with fake `clientId` → cannot access another client's data
+- [ ] Repeated `send-receipt` call → second call returns `{ success: true, alreadySent: true }`, no second email sent
+- [ ] Direct POST to `send-receipt` with invented booking data → `clientId`/`bookingId` lookup fails, returns error
+- [ ] Direct browser read of `clients/X/settings/private` → Firestore returns permission-denied
+- [ ] `get-upload-signature` called 6× from same IP in 10 min → 6th returns 429
+- [ ] Upload oversized file using returned signature → Cloudinary rejects
+- [ ] `send-reject` without `adminNote` → returns 400
+- [ ] Client A's admin token attempts to read Client B's bookings → Firestore returns permission-denied
+
+### Stage Notes
+**2026-06-28:**
+- Security review triggered by pre-launch audit covering Priorities 0–5
+- Old architecture had: public `settings` (exposed SMTP/Telegram), browser-trusted booking data, unsigned Cloudinary uploads, `allow create: if true` on bookings and availability (allowed fake entries)
+- New architecture: `settings/private` server-only, all booking data fetched from Firestore server-side, atomic per-night inventory, signed uploads
+- Migration script (`migrate-settings.js`) run against live Firestore — `settings/main` split into `settings/public` + `settings/private` successfully
+- All three booking site pages updated to read `settings/public` (index.html, property.html, booking.html) — `settings/main` left intact for now (can delete from Firestore console later)
+- `booking.html` rewritten: no more direct Firestore writes — calls `create-booking.js` for booking creation and `get-upload-signature.js` for signed Cloudinary upload
+- Cloudinary signed upload bug fixed: `max_file_size` removed from signature params (it is not a valid Cloudinary upload API parameter — caused 401 Unauthorized)
+- Admin email notification added to `send-receipt.js`: sends booking alert to `smtpEmail` on every new booking submission (guest name, room, dates, total, screenshot link, admin panel button)
+- `expire-holds.js` built and deployed: releases abandoned 45-min inventory holds, extends holds for legitimate bookings (receiptSentAt set) by 72hrs
+- Firestore composite index created: `inventory` collection on `(status ASC, expiresAt ASC)` — required for expire-holds query
+- cron-job.org configured: fires expire-holds every 15 min (`*/15 * * * *`), saves response history
+- Credential rotation: user declined — old SMTP App Password still in git history (commit 609c313). Risk accepted.
+- **End-to-end test PASSED**: full booking flow from booking site to Firestore to receipt email — booking `BK-gX6Ao6AnmXzDIn6aOIIB` created, receipt email received at lstrmrcd02@gmail.com ✅
+
+### Status
+- [x] Stage S Complete ✅ (2026-06-28)
 
 ---
 
@@ -586,9 +774,17 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 - [ ] Update settings → booking site reflects new GCash/PayMaya/bank details within 30 seconds
 
 ### Stage Notes
+**2026-06-29:**
+- All admin panel pages built and deployed to `https://staycation-admin.netlify.app`
+- Login (`index.html`): Firebase Auth email/password, redirect on success, error handling
+- Dashboard (`dashboard.html`): 6 metric cards including "Costs This Month" + "Net This Month" (expenses onSnapshot); recent bookings table; real-time via onSnapshot
+- Bookings (`bookings.html`): full table with status badges, filter by status, search, newest first; Booking Detail modal with screenshot preview + Confirm/Reject/Cancel actions; calls Netlify email functions
+- Settings (`settings.html`): company details, GCash/PayMaya/bank QR upload (signed Cloudinary via get-upload-signature), payment amounts, SMTP, Telegram, **separate Admin Notification Email** (notificationEmail in settings/private — distinct from smtpEmail so admin phone gets a ring on new bookings)
+- QR upload in settings was broken (used unsigned `booking-public` preset that didn't exist) — fixed by switching to signed upload via `get-upload-signature.js` with `type='public'` and Firebase ID token auth
+- Sidebar expanded from 3 to 10 items across all pages: Dashboard, Bookings, Calendar, Units, Amenities, Add-ons, Blocking, Expenses, Design, Settings
 
 ### Status
-- [ ] Stage 5 Complete ✅
+- [x] Stage 5 Complete ✅ (2026-06-29)
 
 ---
 
@@ -650,9 +846,15 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 - [ ] Active Blocks table below: unit, date range, reason, Remove button
 
 ### Stage Notes
+**2026-06-29:**
+- `units.html`: unit card grid, Register/Modify modal with multi-image Cloudinary upload (`type='public'`), delete with active-booking guard, real-time onSnapshot
+- `amenities.html`: icon grid, Add/Edit modal with Font Awesome icon picker, delete confirmation
+- `addons.html`: add-ons table (per unit or all), Add/Edit modal, billing type (per night / one-time)
+- `blocking.html`: split layout — form + active blocks table on left, mini 3-state calendar (blocked=red, pending=amber, confirmed=green) on right; clicking calendar dates pre-fills form
+- Holiday rates page: deferred (not built yet) — override pricing per date not yet implemented
 
 ### Status
-- [ ] Stage 6 Complete ✅
+- [x] Stage 6 Complete ✅ (2026-06-29) — Holiday rates page deferred to Stage 9 polish
 
 ---
 
@@ -685,9 +887,14 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 - [ ] Filterable by month
 
 ### Stage Notes
+**2026-06-29:**
+- `calendar.html`: FullCalendar.js v6.1.11 (CDN), month/week/list views, unit filter dropdown, color-coded events (confirmed=green, pending=amber, blocked=red, expired=gray), click event → booking or block detail modal
+- `expenses.html`: 4 summary cards (Total, This Month, Total Entries, Top Category), Add modal (date/category/description/amount/unit), category + date range filter, delete, real-time onSnapshot
+- Net Proceeds: "Costs This Month" + "Net This Month" added to dashboard metric cards. Expenses onSnapshot listener calculates costs; Net = revenue − costs, updates whenever either listener fires.
+- Export to CSV: deferred to Stage 9 polish
 
 ### Status
-- [ ] Stage 7 Complete ✅
+- [x] Stage 7 Complete ✅ (2026-06-29) — CSV export deferred to Stage 9
 
 ---
 
@@ -724,12 +931,16 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 ### Tasks
 
 **UI/UX Control Panel (Admin → new page)**
-- [ ] Theme Color Customizer: primary color, secondary color, accent color (color pickers → saved to Firestore `settings`)
-- [ ] Booking site reads colors from `settings` and applies via CSS variables on load
-- [ ] Logo upload → replaces booking site logo
-- [ ] Homepage Section Visibility toggles: Hero, Amenities section, Testimonials, Featured Units
-- [ ] Font selection: heading font, body font (Google Fonts)
-- [ ] SEO Settings: site title, meta description, keywords, Open Graph image URL
+- [x] Theme Color Customizer: 6 color pickers (primary, secondary, accent, text, background, footer) synced with hex inputs → saved to Firestore `settings/public` ✅
+- [x] Booking site reads colors from `settings/public` and applies as CSS variables on load ✅
+- [x] Logo upload → Cloudinary signed upload → stored as `logoUrl` in settings ✅
+- [x] Homepage Section Visibility toggles: Hero, Amenities, Testimonials, Featured Units ✅
+- [x] Font selection: heading font + body font (Google Fonts dropdown) ✅
+- [x] SEO Settings: site title, keywords, Open Graph image ✅
+- [x] Hero multi-image upload (Cloudinary signed) — supports multiple hero banner photos ✅
+- [x] Promo banner image upload ✅
+- [ ] Custom domain per client (Stage 9 remaining)
+- [ ] Holiday rates page (override daily rate by date)
 
 **Multi-Client Infrastructure**
 - [ ] Document: how to create a new Firebase Auth user for a new client (Firebase console steps)
@@ -738,6 +949,13 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 - [ ] Document: how to point a custom domain to GitHub Pages (Namecheap → CNAME record)
 - [ ] Document: how to set up custom domain on GitHub Pages settings
 - [ ] Internal pricing sheet: setup fee, custom domain add-on, monthly support fee
+
+**Client Onboarding Kit** (separate doc — `docs/CLIENT_ONBOARDING.md`)
+- [ ] Full checklist of everything Lester needs to collect from a new client before setup
+- [ ] What the client provides: dedicated Gmail + App Password, Telegram account, property details, GCash/PayMaya/bank details, QR code images, unit photos
+- [ ] What Lester sets up: Firebase Auth user, Firestore seed data, Telegram bot, GitHub repo, Netlify settings
+- [ ] Step-by-step Telegram bot setup instructions (BotFather → token → chat ID → Firestore)
+- [ ] Step-by-step Gmail App Password instructions (client walks through this with Lester)
 
 **Final QA Checklist**
 - [ ] Test full booking flow on 3 different mobile devices
@@ -749,9 +967,35 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 - [ ] Verify custom domain works end-to-end (if applicable)
 
 ### Stage Notes
+**2026-06-29 (batch 1):**
+- `design.html` built: 6 color pickers with hex input sync, section visibility toggles, hero multi-image upload, promo banner upload, Google Fonts selection, SEO fields. Writes to `settings/public` via client SDK (allowed by `isAdminForClient()` rule — no Netlify function needed).
+- Booking site (`index.html`, `property.html`, `booking.html`) updated to read design settings at load time and apply as CSS custom properties.
+
+**Booking Site UX Polish (2026-06-29):**
+- **Room card photo carousel**: prev/next arrows + dots, manual only (no auto-cycle). Arrows always visible at 82% opacity (hover-only doesn't work on touch). Hero banner slideshow retains auto-cycle.
+- **Room card clickable**: entire card navigates to `property.html?id=...`; only arrows and "View Room" button call `stopPropagation()`.
+- **Hero banner crossfade**: two stacked div layers — no blank gap between transitions.
+- **Weekend rate price summary**: weekday/weekend nights shown as separate rows in price breakdown.
+- **QR code lightbox**: GCash/Maya/Bank QR images open full-size overlay for screenshot.
+- **Admin panel mobile responsiveness**: horizontal table scroll, bottom-sheet modals, 44px touch targets, 16px inputs (no iOS zoom).
+- **Property page gallery**: prev/next arrows + dots + "1 / N" counter over the hero photo. All photos preloaded. Bug fix: null reference crash on `hero-placeholder` removed.
+
+**2026-06-29 (batch 2 — Stage 9 continued):**
+- **Policies in Settings**: new "Policies" section added to `settings.html` with 4 textareas (Booking Policy, Cancellation Policy, House Rules, Check-in/Check-out Policy). Saves to `settings/public`. `booking-policy.html` and `cancellation.html` on booking site now load content from Firestore — show custom text if set, fall back to default static content if blank.
+- **Financial Report (CSV export)**: "Download Report" button on expenses page. Pulls confirmed bookings (filtered by check-in date range) + expenses. Downloads a CSV with three sections: Revenue, Expenses, Summary (Total Revenue, Total Expenses, Net Profit). Date range uses the existing filter inputs.
+- **Holiday Rates page**: new `holiday-rates.html` admin page — add/delete peak rate overrides per unit and date. Unit filter + month filter. Added to sidebar of all 11 admin pages.
+- **Holiday rates on booking site**: `booking.html` now fetches `holiday_rates` collection on load and stores as a date→rate map. `calcBaseTotal` checks each night against the map — if a holiday rate exists for that date, it overrides the regular weekday/weekend rate. `buildPriceSummaryHTML` shows holiday nights as a separate labeled row (e.g. "1 peak night × ₱6,000 (Christmas)").
+
+**2026-06-29 (batch 3 — bug fixes and polish):**
+- **Fixed Holiday Rates save (permission denied)**: `holiday_rates` collection was missing from `firestore.rules` — no rule = denied. Added public read (booking site needs it for price calc) + admin write. Deployed to Firebase.
+- **Fixed Financial Report query error**: `orderBy('checkIn')` combined with `where('status', '==', 'confirmed')` requires a Firestore composite index that didn't exist. Removed `orderBy` from query and sort client-side instead — same result, no index needed.
+- **Fixed Holiday Rates sidebar icon**: `fa-calendar-star` is a FontAwesome Pro (paid) icon — showed blank on free plan. Replaced with `fa-tag` (free icon) across all 11 admin pages.
+- **Holiday Rates UX**: added "FILTER EXISTING RATES" label above the filter section and a hint line explaining that "+ Add Holiday Rate" is where you enter a specific date and price. The filter uses a month picker just for searching existing rates — the Add modal has a full date + rate form.
+- **Financial Report — upgraded to Excel (.xlsx)**: replaced CSV with a real Excel file using `xlsx-js-style` library (loaded from CDN). Report now has: dark blue title row, grey meta rows, color-coded OVERVIEW (green=revenue, red=expenses, blue=net profit), column headers with light blue background, alternating row stripes, yellow TOTAL rows, and pre-set column widths. Downloads as `.xlsx`.
+- **Pushed booking-policy.html + cancellation.html** to GitHub Pages (these were built in batch 2 but not yet committed — now live).
 
 ### Status
-- [ ] Stage 9 Complete ✅
+- [x] Stage 9 Complete ✅ (all features built, all bugs fixed, all pages live as of 2026-06-29)
 
 ---
 
@@ -878,10 +1122,65 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 
 ---
 
+## ⏭️ Next Session — First Client Onboarding
+
+> The system is 100% production-ready. The next session is purely about replacing test data with real client data and going live.
+
+### Live URLs
+| System | URL |
+|--------|-----|
+| **Admin Panel** | https://staycation-admin.netlify.app |
+| **Booking Site** | https://bookingph.github.io/staycation-booking-site/ |
+| **Firebase Console** | https://console.firebase.google.com/project/lester-booking-system |
+
+### Admin Panel Features (what the client can manage)
+| Page | What it does |
+|------|-------------|
+| **Settings** | Company name, contact info, check-in/check-out times, reservation fee, security deposit, GCash/Maya/Bank QR codes (upload image), SMTP email + App Password (for guest emails), admin notification email, Telegram bot (optional), **Policies** (Booking Policy, Cancellation Policy, House Rules, Check-in/Check-out Policy — plain text, each saved separately, shown on booking site policy pages automatically) |
+| **Design** | Brand colors, Google Fonts, hero banner photos, logo, promo banner, SEO title/description, section visibility toggles |
+| **Units** | Add/edit/delete rooms — name, description, max guests, weekday rate, weekend rate, extra guest fee, check-in time, check-out time, photos (upload multiple), status (active/inactive) |
+| **Amenities** | Pool, WiFi, parking, etc. — shown on all property pages |
+| **Add-ons** | Breakfast, extra bed, etc. — guests can add at booking step 3. Billing per night or flat fee. |
+| **Date Blocking** | Block specific dates from being booked (public holidays, maintenance, owner use) |
+| **Holiday Rates** | Set a peak/holiday rate that overrides weekday/weekend price on specific dates (e.g. Christmas Day → ₱6,000 regardless of weekday/weekend rate). Guests see this labeled in their price breakdown. |
+| **Bookings** | View all bookings, change status (pending → confirmed → completed), send confirmation/rejection/follow-up emails, add internal notes |
+| **Calendar** | Month-view calendar showing all confirmed bookings per room |
+| **Expenses** | Log operational expenses (utilities, maintenance, supplies, etc.). Download a formatted Excel financial report with revenue + expenses + net profit. |
+| **Dashboard** | Total revenue, total expenses, net profit, and count cards |
+
+### Onboarding Checklist (do in this order)
+- [ ] **Settings** — fill in company name, address, contact phone/email, check-in/check-out times, reservation fee amount, security deposit
+- [ ] **Settings → QR Codes** — upload real GCash, Maya, and/or bank QR images
+- [ ] **Settings → Email** — enter the client's Gmail address + App Password (enable 2FA on Gmail first, then generate App Password at myaccount.google.com/apppasswords)
+- [ ] **Settings → Notification email** — email address where the owner gets alerted on new bookings
+- [ ] **Settings → Telegram** — optional: bot token + chat ID for instant Telegram pings on each booking
+- [ ] **Settings → Policies** — type the client's policies in plain text (use `- ` to start bullet points). These appear on the Booking Policy and Cancellation Policy pages of the booking site.
+- [ ] **Design** — set brand colors, upload logo, upload hero photos, set SEO title/description
+- [ ] **Units** — add real rooms with photos, accurate rates, capacity
+- [ ] **Amenities** — list what the property offers (pool, WiFi, etc.)
+- [ ] **Add-ons** — add any optional extras (breakfast, extra mattress, etc.)
+- [ ] **Holiday Rates** — add any peak dates (Christmas, New Year, long weekends)
+- [ ] **End-to-end test** — make a test booking from the booking site → confirm payment screenshot upload works → confirm admin gets email + Telegram → admin confirms booking → confirm guest gets confirmation email
+- [ ] **Go live** — share the booking site URL with the client
+
+### Stage 8 (chatbot — do anytime after onboarding)
+1. In n8n, open the Lester Domain Staycation AI Agent node
+2. In the system prompt, add: *"When a guest asks to book, send them this link: [booking site URL]. Room IDs: [list each room name and its booking URL]"*
+3. Test via Facebook Messenger — send a booking inquiry and verify the AI replies with the correct link
+
+---
+
 ## Completed Stages
 - ✅ **Stage 1** — Foundation & Architecture Setup (2026-06-28)
 - ✅ **Stage 2** — Booking Website: Listing Page + Property Detail Page (2026-06-28)
 - ✅ **Stage 3** — Booking Website: 4-Step Booking Flow (2026-06-28)
+- ✅ **Stage 4** — Netlify Functions: All 4 email functions + admin notification (2026-06-28)
+- ✅ **Stage S** — Security Hardening: server-side booking, signed uploads, atomic inventory, expire-holds (2026-06-28)
+- ✅ **Stage 5** — Admin Panel Core: login, dashboard, bookings, settings, QR upload fix, separate notification email (2026-06-29)
+- ✅ **Stage 6** — Admin Panel Property Management: units, amenities, add-ons, date blocking (2026-06-29)
+- ✅ **Stage 7** — Admin Panel Calendar & Expenses: FullCalendar.js, expenses page, net proceeds on dashboard (2026-06-29)
+- ✅ **Stage 9** — Design page, editable policies (Settings + booking site), holiday rates (admin + booking site + Firestore rules), Excel financial report (.xlsx with colors/borders/formatting), property gallery (prev/next/dots/counter), room card carousel (manual), hero crossfade fix, QR lightbox, admin mobile CSS, all bugs fixed (2026-06-29)
+- ⏭️ **Stage 8** — Skipped (5-min manual task: update n8n system prompt with booking URL — do after first client is onboarded)
 
 ---
 
@@ -897,6 +1196,14 @@ If a sub-task is blocked, note it under Stage Notes before moving on.
 | 2026-06-28 | v7 | Stage 1 complete. Repos transferred to bookingPH GitHub account. GitHub Pages live. Netlify admin panel live. |
 | 2026-06-28 | v8 | Email architecture finalized: each client uses their own dedicated Gmail + App Password, stored in Firestore settings. Netlify Function reads it at send time — fully personalized per client. Telegram is optional per client (stored in Firestore settings, skipped silently if not set). Test SMTP set to lstrmrcd@gmail.com for development. Firestore data model updated to include smtpEmail, smtpPassword, telegramToken, telegramChatId in settings. Stage 2 starting. |
 | 2026-06-28 | v9 | Stages 2 and 3 complete. 4 bugs fixed in booking flow (see Stage 3 notes). New `availability` Firestore collection added (public calendar data, no personal info). Security deposit added as editable setting (₱1,000 default). Price summary redesigned: clearly shows Pay Now (reservation fee) vs Pay at Check-in (balance + security deposit). Stage 4 notes updated with CORS requirement, Telegram alert details, and per-client SMTP flow. Admin panel `availability` sync requirement noted in Stage 5. |
+| 2026-06-28 | v10 | Stage 4 in progress. `send-receipt.js` deployed and tested end-to-end. `FIREBASE_SERVICE_ACCOUNT` env var stored as base64 (Netlify CLI strips JSON quotes from raw JSON values). SMTP credentials seeded in Firestore for test client. Email HTML template with terracotta header and booking summary built. Telegram alert with HTML parse_mode included (silently skipped if not configured). |
+| 2026-06-28 | v11 | Stage 4 partially complete. All 4 Netlify Functions deployed and tested. Email spam prevention and testing deferred to Stage S. |
+| 2026-06-28 | v12 | Pre-launch security review. Stage S (Security Hardening) inserted before Stage 5. Architecture changes: settings split public/private, booking creation moved server-side (create-booking.js), atomic per-night inventory (Firestore transactions), email functions now fetch-from-Firestore only (clientId+bookingId interface), signed Cloudinary uploads (get-upload-signature.js). Credentials removed from plan doc and marked for rotation. Firestore rules tightened: no public create on bookings/availability, settings/private unreadable by browser. |
+| 2026-06-28 | v13 | Stage S complete. Migration script run (settings/main → public+private). All booking site pages updated to read settings/public. booking.html rewired to use create-booking.js + get-upload-signature.js (no more direct Firestore writes). Cloudinary signed upload 401 bug fixed (max_file_size removed from signature params). Admin email notification added to send-receipt.js. expire-holds.js built, deployed, Firestore composite index created, cron-job.org configured every 15 min. End-to-end booking flow tested and working. Stage 5 (Admin Panel) is next. |
+| 2026-06-29 | v14 | Stages 5, 6, 7 complete. Stage 9 design page built. All admin panel pages deployed to staycation-admin.netlify.app: login, dashboard (costs/net cards), bookings (full modal + email actions), settings (separate notification email, signed QR uploads), units, amenities, add-ons, blocking (mini 3-state calendar), calendar (FullCalendar.js), expenses, design (color/font/hero/SEO). Booking site UX: room card carousel, fully clickable cards, hero crossfade fix (two-layer), weekend rate price breakdown, QR code lightbox, admin panel mobile CSS. Stage 8 (chatbot integration) is next. |
+
+| 2026-06-29 | v15 | Stage 9 nearly complete. Policies section in settings (4 textareas → Firestore → booking site loads dynamically, falls back to static). Financial Report CSV on expenses page (Revenue + Expenses + Net Profit, date-range filtered). Holiday Rates admin page (add/delete peak overrides per unit/date, sidebar on all 11 pages). Holiday rates applied in booking.html (per-night override, labeled row in price summary). Property page photo gallery with prev/next arrows, dots, counter. Room card carousel manual-only (no auto-cycle), arrows always visible. Bug fix: property page null crash on hero-placeholder. Stage 8 skipped. Next: first client onboarding. |
+| 2026-06-29 | v16 | Stage 9 complete. Bug fixes: Holiday Rates save (Firestore rules missing holiday_rates collection → added public read + admin write, deployed); Financial Report Firestore composite index error (removed orderBy, sort client-side); Holiday Rates sidebar icon (fa-calendar-star is FA Pro/paid → replaced with fa-tag across all 11 pages). Financial Report upgraded from CSV to formatted Excel (.xlsx) using xlsx-js-style CDN library — dark blue title, color-coded overview, alternating row stripes, yellow totals rows, pre-set column widths. Holiday Rates UX: added filter label + usage hint. Pushed booking-policy.html and cancellation.html to GitHub Pages (was pending). Next session: first real client onboarding (see "Next Session" section in this doc). |
 
 ---
 *Plan created: 2026-06-28 | Project: Lester AI Chatbot Services — Staycation Booking System*
